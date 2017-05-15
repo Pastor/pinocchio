@@ -1,0 +1,1 @@
+1. Generate Visual Studio Solution - `cmake .. -DCMAKE_BUILD_TYPE=Debug -G "Visual Studio 14 2015 Win64"`

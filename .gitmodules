@@ -1,0 +1,6 @@
+[submodule "3rdparty/mongoose"]
+	path = 3rdparty/mongoose
+	url = https://github.com/cesanta/mongoose.git
+[submodule "3rdparty/gtest"]
+	path = 3rdparty/gtest
+	url = https://github.com/google/googletest.git
