@@ -10,23 +10,14 @@ set(PINOCCHIO_PRODUCT_NUMBER 1)
 set(PINOCCHIO_PRODUCT_VERSION 6)
 set(PINOCCHIO_BUILD_NUMBER 1)
 
-if (WIN32)
-    link_directories(${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/botan/windows/x86_64)
-    set(BOTAN_LIBRARIES botan)
-    set(BOTAN_INCLUDE_DIR
-            ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/botan/windows/x86_64/include
-            ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/botan/windows/x86_64/include/external
-            )
-else ()
-    find_package(Botan REQUIRED)
-endif ()
+set(USE_STATIC_BOTAN ON)
 
 if (MSVC)
     set(CMAKE_CXX_LINK_FLAGS "${CMAKE_CXX_LINK_FLAGS} /SUBSYSTEM:CONSOLE")
     if (${CMAKE_BUILD_TYPE} STREQUAL "Debug")
         set(CMAKE_CFLAGS "${CMAKE_CFLAGS} /MDd")
         add_compile_options(/MDd)
-#        add_definitions(-DMEMORY_LEAK_DETECT)
+        #        add_definitions(-DMEMORY_LEAK_DETECT)
         message(STATUS "Memory leak detection enabled")
     else ()
         add_definitions(/MT)
@@ -40,12 +31,36 @@ else ()
     set(CMAKE_CFLAGS "${CMAKE_CFLAGS} -pedantic -Wp,-w -Wa,-mbig-obj")
 endif ()
 
+if (WIN32)
+    if (${USE_STATIC_BOTAN} STREQUAL "ON")
+        add_subdirectory(3rdparty/botan)
+        set(BOTAN_LIBRARIES botan_static)
+        set(BOTAN_INCLUDE_DIR
+                ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/botan/src
+                ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/botan/src/external)
+        add_definitions(-DUSE_STATIC_BOTAN)
+    else (${USE_STATIC_BOTAN} STREQUAL "ON")
+        link_directories(${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/botan/windows/x86_64)
+        set(BOTAN_LIBRARIES botan)
+        set(BOTAN_INCLUDE_DIR
+                ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/botan/windows/x86_64/include
+                ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/botan/windows/x86_64/include/external)
+        file(COPY
+                ${CMAKE_SOURCE_DIR}/3rdparty/botan/windows/x86_64/botan.dll
+                DESTINATION
+                ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
+    endif (${USE_STATIC_BOTAN} STREQUAL "ON")
+else (WIN32)
+    find_package(Botan REQUIRED)
+endif (WIN32)
+
 include_directories(src/main)
 include_directories(3rdparty/gtest/googletest/include)
 include_directories(3rdparty/mongoose)
 include_directories(3rdparty/sqlite)
 include_directories(3rdparty/json)
 include_directories(${BOTAN_INCLUDE_DIR})
+
 add_subdirectory(3rdparty/gtest/googletest)
 
 set(SOURCE_FILES)
@@ -97,10 +112,3 @@ file(COPY
         ${CMAKE_SOURCE_DIR}/test_data/request_body.txt
         DESTINATION
         ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/test_data)
-
-if (WIN32)
-    file(COPY
-            ${CMAKE_SOURCE_DIR}/3rdparty/botan/windows/x86_64/botan.dll
-            DESTINATION
-            ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
-endif ()

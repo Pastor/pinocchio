@@ -1,8 +1,12 @@
 ﻿#include <gtest/gtest.h>
+#if defined(USE_STATIC_BOTAN)
+#include <botan_all.h>
+#else
 #include <botan/botan.h>
 #include <botan/pipe.h>
 #include <botan/basefilt.h>
 #include <botan/filters.h>
+#endif
 #include <fstream>
 
 TEST(BaseProvider, CipherDES) {
@@ -10,7 +14,7 @@ TEST(BaseProvider, CipherDES) {
     std::vector<uint8_t> key = {0, 0, 0, 0, 0, 0, 0, 0};
     uint8_t buf[8];
     uint8_t copy[sizeof(buf)];
-    std::unique_ptr<Botan::BlockCipher> cipher(Botan::BlockCipher::create_or_throw("DES", "base"));
+    auto cipher(Botan::BlockCipher::create_or_throw("DES", "base"));
 
     EXPECT_EQ(cipher->block_size(), 8);
     ASSERT_TRUE(cipher->valid_keylength(8));
@@ -31,16 +35,16 @@ process_pipe(Botan::Pipe &pipe, const char *const input, const char *const outpu
     std::ifstream infile(input, std::ios::binary);
     std::ofstream outfile(output, std::ios::binary);
     while (infile.good()) {
-        infile.read((char *) &buffer[0], buffer.size());
-        const size_t got_from_infile = (const size_t) infile.gcount();
+        infile.read(reinterpret_cast<char *>(&buffer[0]), buffer.size());
+        const auto got_from_infile = static_cast<const size_t>(infile.gcount());
         pipe.write(&buffer[0], got_from_infile);
 
         if (infile.eof())
             pipe.end_msg();
 
         while (pipe.remaining(0) > 0) {
-            const size_t buffered = pipe.read(&buffer[0], buffer.size(), 0);
-            outfile.write((const char *) &buffer[0], buffered);
+            const auto buffered = pipe.read(&buffer[0], buffer.size(), 0);
+            outfile.write(reinterpret_cast<const char *>(&buffer[0]), buffered);
         }
     }
     ASSERT_FALSE(infile.bad() || (infile.fail() && !infile.eof()));
