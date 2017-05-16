@@ -1,9 +1,6 @@
 #include <iostream>
 #include <fstream>
-#include <string>
 #include <sstream>
-#include <algorithm>
-#include <iterator>
 #include <gtest/gtest.h>
 #if defined(USE_STATIC_BOTAN)
 #include <botan_all.h>
@@ -13,7 +10,7 @@
 #endif
 
 int main(int argc, char **argv) {
-    std::cerr << Botan::runtime_version_check(BOTAN_VERSION_MAJOR, BOTAN_VERSION_MINOR, BOTAN_VERSION_PATCH);
+    std::cerr << Botan::runtime_version_check(BOTAN_VERSION_MAJOR, BOTAN_VERSION_MINOR, BOTAN_VERSION_PATCH) << std::endl;
     ::testing::InitGoogleTest(&argc, argv);
 #if defined(MEMORY_LEAK_DETECT)
     _CrtMemState _checkpoint_start;

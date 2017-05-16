@@ -9,7 +9,7 @@
 #endif
 #include <fstream>
 
-void
+static void
 process_pipe(Botan::Pipe &pipe, const char *const input, const char *const output) {
     pipe.start_msg();
     Botan::secure_vector<Botan::byte> buffer(4096);

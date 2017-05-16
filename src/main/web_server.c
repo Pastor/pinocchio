@@ -1,7 +1,5 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdint.h>
-#include <string.h>
 #include <mongoose.h>
 #include <version.h>
 #include "web_server.h"
@@ -66,7 +64,7 @@ handle_upload(struct mg_connection *nc, int ev, void *p) {
                                   "Content-Type: text/plain\r\n"
                                   "Connection: close\r\n\r\n"
                                   "Written %ld of POST data to a temp file\n\n",
-                          (long) ftell(data->fp));
+                          ftell(data->fp));
                 nc->flags |= MG_F_SEND_AND_CLOSE;
                 fclose(data->fp);
                 free(data);
@@ -74,6 +72,8 @@ handle_upload(struct mg_connection *nc, int ev, void *p) {
             }
             break;
         }
+        default:
+            break;
     }
 }
 
@@ -95,6 +95,8 @@ ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
                               "</form></body></html>");
             nc->flags |= MG_F_SEND_AND_CLOSE;
             break;
+        default:
+            break;
     }
 }
 
@@ -103,7 +105,7 @@ int
 web_server_create(struct web_server **server, const char * port) {
     (*server) = calloc(1, sizeof(struct web_server));
     (*server)->data = calloc(1, sizeof(struct web_server_data));
-    (*server)->data->port = strtol(port, NULL, 10);
+    (*server)->data->port = (int) strtol(port, NULL, 10);
     mg_mgr_init(&(*server)->data->mgr, NULL);
     (*server)->data->nc = mg_bind(&(*server)->data->mgr, port, ev_handler);
 
@@ -123,7 +125,7 @@ web_server_start(struct web_server *server) {
 int
 web_server_stop(struct web_server *server) {
     (*server).data->running = FALSE;
-    return true;
+    return TRUE;
 }
 
 int

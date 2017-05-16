@@ -1,4 +1,8 @@
 #pragma once
+#if !defined(TRUE) || !defined(FALSE)
+#define TRUE  1
+#define FALSE 0
+#endif
 
 struct web_server_data;
 struct web_server {
