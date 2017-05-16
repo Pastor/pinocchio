@@ -9,25 +9,6 @@
 #endif
 #include <fstream>
 
-TEST(BaseProvider, CipherDES) {
-    Botan::AutoSeeded_RNG rng;
-    std::vector<uint8_t> key = {0, 0, 0, 0, 0, 0, 0, 0};
-    uint8_t buf[8];
-    uint8_t copy[sizeof(buf)];
-    auto cipher(Botan::BlockCipher::create_or_throw("DES", "base"));
-
-    EXPECT_EQ(cipher->block_size(), 8);
-    ASSERT_TRUE(cipher->valid_keylength(8));
-
-    rng.randomize(key.data(), key.size());
-    cipher->set_key(key);
-    memset(buf, 0, sizeof(buf));
-    memcpy(copy, buf, sizeof(buf));
-    cipher->encrypt(buf);
-    cipher->decrypt(buf);
-    ASSERT_TRUE(memcmp(copy, buf, sizeof(buf)) == 0);
-}
-
 void
 process_pipe(Botan::Pipe &pipe, const char *const input, const char *const output) {
     pipe.start_msg();
@@ -48,6 +29,25 @@ process_pipe(Botan::Pipe &pipe, const char *const input, const char *const outpu
         }
     }
     ASSERT_FALSE(infile.bad() || (infile.fail() && !infile.eof()));
+}
+
+TEST(BaseProvider, CipherDES) {
+    Botan::AutoSeeded_RNG rng;
+    std::vector<uint8_t> key = {0, 0, 0, 0, 0, 0, 0, 0};
+    uint8_t buf[8];
+    uint8_t copy[sizeof(buf)];
+    std::unique_ptr<Botan::BlockCipher> cipher(Botan::BlockCipher::create_or_throw("DES", "base"));
+
+    EXPECT_EQ(cipher->block_size(), 8);
+    ASSERT_TRUE(cipher->valid_keylength(8));
+
+    rng.randomize(key.data(), key.size());
+    cipher->set_key(key);
+    memset(buf, 0, sizeof(buf));
+    memcpy(copy, buf, sizeof(buf));
+    cipher->encrypt(buf);
+    cipher->decrypt(buf);
+    ASSERT_TRUE(memcmp(copy, buf, sizeof(buf)) == 0);
 }
 
 TEST(BaseProvider, Pipe) {

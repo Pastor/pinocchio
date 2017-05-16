@@ -15,14 +15,16 @@ set(USE_STATIC_BOTAN ON)
 if (MSVC)
     set(CMAKE_CXX_LINK_FLAGS "${CMAKE_CXX_LINK_FLAGS} /SUBSYSTEM:CONSOLE")
     if (${CMAKE_BUILD_TYPE} STREQUAL "Debug")
-        set(CMAKE_CFLAGS "${CMAKE_CFLAGS} /MDd")
-        add_compile_options(/MDd)
+        set(CMAKE_CFLAGS "${CMAKE_CFLAGS} /MDd /bigobj")
+        add_compile_options(/MDd /bigobj)
         #        add_definitions(-DMEMORY_LEAK_DETECT)
         message(STATUS "Memory leak detection enabled")
     else ()
         add_definitions(/MT)
+        add_compile_options(/bigobj)
     endif ()
     add_definitions(/wd4267)
+    add_definitions(/wd4250)
 elseif (CMAKE_COMPILER_IS_GNUCXX)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14 -pedantic -Wp,-w -Wa,-mbig-obj")
     set(CMAKE_CFLAGS "${CMAKE_CFLAGS} -pedantic -Wp,-w -Wa,-mbig-obj")
@@ -64,7 +66,7 @@ include_directories(${BOTAN_INCLUDE_DIR})
 add_subdirectory(3rdparty/gtest/googletest)
 
 set(SOURCE_FILES)
-set(MAIN_FILES src/main/main.c)
+set(MAIN_FILES src/main/main.c src/main/web_server.c)
 set(TESTS_FILES src/test/pipe_tests.cpp src/test/main.cpp)
 
 set(MONGOOSE 3rdparty/mongoose/mongoose.c)
@@ -81,7 +83,7 @@ add_definitions(
 
 #add_definitions(-DDISABLE_MD5)
 
-set(SQLITE 3rdparty/sqlite/sqlite3.c)
+set(SQLITE 3rdparty/sqlite/sqlite3.c src/main/web_server.c)
 configure_file(
         ${CMAKE_CURRENT_SOURCE_DIR}/src/main/version.rc.in
         ${CMAKE_CURRENT_BINARY_DIR}/version.rc
