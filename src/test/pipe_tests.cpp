@@ -52,15 +52,15 @@ TEST(BaseProvider, CipherDES) {
     uint8_t copy[sizeof(buf)];
     std::unique_ptr<Botan::BlockCipher> cipher(Botan::BlockCipher::create_or_throw("DES", "base"));
 
-    EXPECT_EQ(cipher->block_size(), 8);
-    ASSERT_TRUE(cipher->valid_keylength(8));
+    EXPECT_EQ((*cipher).block_size(), 8);
+    ASSERT_TRUE((*cipher).valid_keylength(8));
 
     rng.randomize(key.data(), key.size());
-    cipher->set_key(key);
+    (*cipher).set_key(key);
     memset(buf, 0, sizeof(buf));
     memcpy(copy, buf, sizeof(buf));
-    cipher->encrypt(buf);
-    cipher->decrypt(buf);
+    (*cipher).encrypt(buf);
+    (*cipher).decrypt(buf);
     ASSERT_TRUE(memcmp(copy, buf, sizeof(buf)) == 0);
 }
 
@@ -143,7 +143,7 @@ struct CA_Support {
     void revoke(Botan::RandomNumberGenerator &rand, const UserKey &key, Botan::CRL_Code why = Botan::KEY_COMPROMISE) {
         std::vector<Botan::CRL_Entry> revoked;
 
-        revoked.push_back(Botan::CRL_Entry(key.signed_certificate, why));
+        revoked.emplace_back(Botan::CRL_Entry(key.signed_certificate, why));
         crl = ca.update_crl(crl, revoked, rand);
         store.add_crl(crl);
     }
