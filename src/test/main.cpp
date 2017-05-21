@@ -2,15 +2,32 @@
 #include <fstream>
 #include <sstream>
 #include <gtest/gtest.h>
-#if defined(USE_STATIC_BOTAN)
+
+#if defined(CRYPTO_BOTAN)
+#if defined(USE_STATIC)
 #include <botan_all.h>
 #else
 #include <botan/version.h>
 #include <botan/init.h>
 #endif
+#elif defined(CRYPTO_OPENSSL)
+#include <openssl/conf.h>
+#include <openssl/crypto.h>
+#endif
 
 int main(int argc, char **argv) {
+#if defined(CRYPTO_BOTAN)
     std::cerr << Botan::runtime_version_check(BOTAN_VERSION_MAJOR, BOTAN_VERSION_MINOR, BOTAN_VERSION_PATCH) << std::endl;
+#elif defined(CRYPTO_OPENSSL)
+	char *p = getenv("OPENSSL_DEBUG_MEMORY");
+	if (p != NULL && strcmp(p, "on") == 0)
+		CRYPTO_set_mem_debug(1);
+	CRYPTO_mem_ctrl(CRYPTO_MEM_CHECK_ON);
+#	ifdef SIGPIPE
+	signal(SIGPIPE, SIG_IGN);
+#	endif
+	OPENSSL_init_crypto(OPENSSL_INIT_ENGINE_ALL_BUILTIN | OPENSSL_INIT_LOAD_CONFIG, NULL);
+#endif
     ::testing::InitGoogleTest(&argc, argv);
 #if defined(MEMORY_LEAK_DETECT)
     _CrtMemState _checkpoint_start;
@@ -30,5 +47,10 @@ int main(int argc, char **argv) {
     if (_CrtMemDifference(&_checkpoint_diff, &_checkpoint_start, &_checkpoint_end))
         _CrtMemDumpStatistics( &_checkpoint_diff );
 #endif
+	
+#if defined(CRYPTO_OPENSSL)
+	CRYPTO_cleanup_all_ex_data();
+#endif
+
     return ret;
 }
