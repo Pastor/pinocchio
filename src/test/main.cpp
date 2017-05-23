@@ -11,6 +11,7 @@
 #include <botan/init.h>
 #endif
 #elif defined(CRYPTO_OPENSSL)
+#include <openssl/opensslv.h>
 #include <openssl/conf.h>
 #include <openssl/crypto.h>
 #endif
@@ -20,13 +21,25 @@ int main(int argc, char **argv) {
     std::cerr << Botan::runtime_version_check(BOTAN_VERSION_MAJOR, BOTAN_VERSION_MINOR, BOTAN_VERSION_PATCH) << std::endl;
 #elif defined(CRYPTO_OPENSSL)
 	char *p = getenv("OPENSSL_DEBUG_MEMORY");
-	if (p != NULL && strcmp(p, "on") == 0)
-		CRYPTO_set_mem_debug(1);
+
 	CRYPTO_mem_ctrl(CRYPTO_MEM_CHECK_ON);
 #	ifdef SIGPIPE
 	signal(SIGPIPE, SIG_IGN);
 #	endif
-	OPENSSL_init_crypto(OPENSSL_INIT_ENGINE_ALL_BUILTIN | OPENSSL_INIT_LOAD_CONFIG, NULL);
+
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+    if (p != NULL && strcmp(p, "on") == 0) {
+        CRYPTO_set_mem_debug_options(V_CRYPTO_MDEBUG_ALL);
+        CRYPTO_malloc_debug_init();
+    }
+    OPENSSL_init();
+    ERR_load_CRYPTO_strings();
+#else
+    if (p != NULL && strcmp(p, "on") == 0)
+		CRYPTO_set_mem_debug(1);
+    OPENSSL_init_crypto(OPENSSL_INIT_ENGINE_ALL_BUILTIN | OPENSSL_INIT_LOAD_CONFIG, NULL);
+#endif
+
 #endif
     ::testing::InitGoogleTest(&argc, argv);
 #if defined(MEMORY_LEAK_DETECT)

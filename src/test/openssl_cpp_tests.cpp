@@ -24,7 +24,7 @@ void gen_params(byte key[KEY_SIZE], byte iv[BLOCK_SIZE]);
 void aes_encrypt(const byte key[KEY_SIZE], const byte iv[BLOCK_SIZE], const secure_string& ptext, secure_string& ctext);
 void aes_decrypt(const byte key[KEY_SIZE], const byte iv[BLOCK_SIZE], const secure_string& ctext, secure_string& rtext);
 
-TEST(BaseProvicer_CPP, SymmetricKey) {
+TEST(OpenSSL_BaseProvicer_CPP, SymmetricKey) {
 	EVP_add_cipher(EVP_aes_256_cbc());
 
 	secure_string ptext = "Message";
@@ -34,8 +34,8 @@ TEST(BaseProvicer_CPP, SymmetricKey) {
 	gen_params(key, iv);
 
 	aes_encrypt(key, iv, ptext, ctext);
-	BIO_dump_fp(stdout, (const char *)ptext.c_str(), ptext.size());
-	BIO_dump_fp(stdout, (const char *)ctext.c_str(), ctext.size());
+	BIO_dump_fp(stdout, ptext.c_str(), (int) ptext.size());
+	BIO_dump_fp(stdout, ctext.c_str(), (int) ctext.size());
 	aes_decrypt(key, iv, ctext, rtext);
 
 	OPENSSL_cleanse(key, KEY_SIZE);
@@ -57,7 +57,7 @@ void gen_params(byte key[KEY_SIZE], byte iv[BLOCK_SIZE])
 
 void 
 aes_encrypt(const byte key[KEY_SIZE], const byte iv[BLOCK_SIZE], const secure_string& ptext, secure_string& ctext) {
-    EVP_CIPHER_CTX_free_ptr ctx(EVP_CIPHER_CTX_new(), ::EVP_CIPHER_CTX_free);
+    EVP_CIPHER_CTX_free_ptr ctx(EVP_CIPHER_CTX_new(), (void (&&)(EVP_CIPHER_CTX *)) ::EVP_CIPHER_CTX_free);
     int rc = EVP_EncryptInit_ex(ctx.get(), EVP_aes_256_cbc(), NULL, key, iv);
     if (rc != 1)
       throw std::runtime_error("EVP_EncryptInit_ex failed");
@@ -74,12 +74,12 @@ aes_encrypt(const byte key[KEY_SIZE], const byte iv[BLOCK_SIZE], const secure_st
     if (rc != 1)
       throw std::runtime_error("EVP_EncryptFinal_ex failed");
 
-    ctext.resize(out_len1 + out_len2);
+    ctext.resize((unsigned long) (out_len1 + out_len2));
 }
 
 void 
 aes_decrypt(const byte key[KEY_SIZE], const byte iv[BLOCK_SIZE], const secure_string& ctext, secure_string& rtext) {
-    EVP_CIPHER_CTX_free_ptr ctx(EVP_CIPHER_CTX_new(), ::EVP_CIPHER_CTX_free);
+    EVP_CIPHER_CTX_free_ptr ctx(EVP_CIPHER_CTX_new(), (void (&&)(EVP_CIPHER_CTX *)) ::EVP_CIPHER_CTX_free);
     int rc = EVP_DecryptInit_ex(ctx.get(), EVP_aes_256_cbc(), NULL, key, iv);
     if (rc != 1)
       throw std::runtime_error("EVP_DecryptInit_ex failed");
@@ -96,5 +96,5 @@ aes_decrypt(const byte key[KEY_SIZE], const byte iv[BLOCK_SIZE], const secure_st
     if (rc != 1)
       throw std::runtime_error("EVP_DecryptFinal_ex failed");
 
-    rtext.resize(out_len1 + out_len2);
+    rtext.resize((unsigned long) (out_len1 + out_len2));
 }

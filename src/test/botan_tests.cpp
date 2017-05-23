@@ -45,7 +45,7 @@ process_pipe(Botan::Pipe &pipe, const char *const input, const char *const outpu
     ASSERT_FALSE(infile.bad() || (infile.fail() && !infile.eof()));
 }
 
-TEST(BaseProvider, CipherDES) {
+TEST(Botan_BaseProvider, CipherDES) {
     Botan::AutoSeeded_RNG rng;
     std::vector<uint8_t> key = {0, 0, 0, 0, 0, 0, 0, 0};
     uint8_t buf[8];
@@ -64,7 +64,7 @@ TEST(BaseProvider, CipherDES) {
     ASSERT_TRUE(memcmp(copy, buf, sizeof(buf)) == 0);
 }
 
-TEST(BaseProvider, Pipe) {
+TEST(Botan_BaseProvider, Pipe) {
     Botan::AutoSeeded_RNG rng;
     Botan::SymmetricKey key(rng, 32);
     Botan::InitializationVector iv(rng, 16);
@@ -264,7 +264,7 @@ private:
     }
 };
 
-TEST(BaseProvider, KeyStorage) {
+TEST(Botan_BaseProvider, KeyStorage) {
     KeyStorage storage("RSA", "SHA-256");
     const auto constraints = Botan::Key_Constraints(Botan::KEY_CERT_SIGN | Botan::CRL_SIGN);
     ASSERT_TRUE(storage.ca_has_contains(constraints));
