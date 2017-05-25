@@ -7,7 +7,7 @@
 #include <openssl/x509v3.h>
 
 void
-handleErrors(void) {
+handleErrors() {
     ERR_print_errors_fp(stderr);
 }
 
@@ -21,9 +21,10 @@ encrypt(unsigned char *plaintext,
     int len;
     int ciphertext_len;
 
-    if (!(ctx = EVP_CIPHER_CTX_new()))
+
+    if ((ctx = EVP_CIPHER_CTX_new()) == nullptr)
         handleErrors();
-    if (1 != EVP_EncryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, key, iv))
+    if (1 != EVP_EncryptInit_ex(ctx, EVP_aes_256_cbc(), nullptr, key, iv))
         handleErrors();
     if (1 != EVP_EncryptUpdate(ctx, ciphertext, &len, plaintext, plaintext_len))
         handleErrors();
@@ -45,9 +46,9 @@ decrypt(unsigned char *ciphertext,
     int len;
     int plaintext_len;
 
-    if (!(ctx = EVP_CIPHER_CTX_new()))
+    if ((ctx = EVP_CIPHER_CTX_new()) == nullptr)
         handleErrors();
-    if (1 != EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, key, iv))
+    if (1 != EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), nullptr, key, iv))
         handleErrors();
     if (1 != EVP_DecryptUpdate(ctx, plaintext, &len, ciphertext, ciphertext_len))
         handleErrors();
@@ -59,17 +60,17 @@ decrypt(unsigned char *ciphertext,
     return plaintext_len;
 }
 
-TEST(OpenSSL_BaseProvider_C, SymmetricKey) {
-    unsigned char *key = (unsigned char *) "01234567890123456789012345678901";
-    unsigned char *iv = (unsigned char *) "0123456789012345";
-    unsigned char *plaintext =
+TEST(BaseProvider_C, SymmetricKey) {
+    auto *key = (unsigned char *) "01234567890123456789012345678901";
+    auto *iv = (unsigned char *) "0123456789012345";
+    auto *plaintext =
             (unsigned char *) "Message";
     unsigned char ciphertext[128];
     unsigned char decryptedtext[128];
     int decryptedtext_len, ciphertext_len;
 
-    ciphertext_len = encrypt(plaintext, (int) strlen((char *) plaintext), key, iv,
-                             ciphertext);
+    ciphertext_len = encrypt(plaintext, (int) strlen((char *) plaintext), key, iv, ciphertext);
+
     //BIO_dump_fp(stdout, (const char *)plaintext, strlen((char *)plaintext));
     //BIO_dump_fp(stdout, (const char *)ciphertext, ciphertext_len);
     decryptedtext_len = decrypt(ciphertext, ciphertext_len, key, iv,
@@ -79,18 +80,18 @@ TEST(OpenSSL_BaseProvider_C, SymmetricKey) {
 }
 
 int
-add_ext(X509 *cert, int nid, char *value) {
+add_ext(X509 *cert, int nid, const char *value) {
     X509_EXTENSION *ex;
-    X509V3_CTX ctx;
+    X509V3_CTX ctx = {0, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr};
     /* This sets the 'context' of the extensions. */
     /* No configuration database */
     X509V3_set_ctx_nodb(&ctx);
     /* Issuer and subject certs: both the target since it is self signed,
     * no request and no CRL
     */
-    X509V3_set_ctx(&ctx, cert, cert, NULL, NULL, 0);
-    ex = X509V3_EXT_conf_nid(NULL, &ctx, nid, value);
-    if (!ex)
+    X509V3_set_ctx(&ctx, cert, cert, nullptr, nullptr, 0);
+    ex = X509V3_EXT_conf_nid(nullptr, &ctx, nid, value);
+    if (ex == nullptr)
         return 0;
 
     X509_add_ext(cert, ex, -1);
@@ -105,7 +106,7 @@ TEST(OpenSSL_BaseProvider_C, PKI_Generate) {
 
     ret = BN_set_word(big, RSA_F4);
     ASSERT_EQ(ret, 1);
-    ret = RSA_generate_key_ex(rsa, 2048, big, NULL);
+    ret = RSA_generate_key_ex(rsa, 2048, big, nullptr);
     ASSERT_EQ(ret, 1);
 
     {
@@ -126,14 +127,14 @@ TEST(OpenSSL_BaseProvider_C, PKI_Generate) {
         BIO *private_key = BIO_new(BIO_s_mem());
         BIO *public_key = BIO_new(BIO_s_mem());
 
-        PEM_write_bio_RSAPrivateKey(private_key, rsa, NULL, NULL, 0, NULL, NULL);
+        PEM_write_bio_RSAPrivateKey(private_key, rsa, nullptr, nullptr, 0, nullptr, nullptr);
         PEM_write_bio_RSAPublicKey(public_key, rsa);
 
-        int private_key_len = BIO_pending(private_key);
-        int public_key_len = BIO_pending(public_key);
+        auto private_key_len = BIO_pending(private_key);
+        auto public_key_len = BIO_pending(public_key);
 
-        char *private_key_text = (char *) malloc((size_t) (private_key_len + 1));
-        char *public_key_text = (char *) malloc((size_t) (public_key_len + 1));
+        auto private_key_text = (char *) malloc((size_t) (private_key_len + 1));
+        auto public_key_text = (char *) malloc((size_t) (public_key_len + 1));
 
         BIO_read(private_key, private_key_text, private_key_len);
         BIO_read(public_key, public_key_text, public_key_len);
@@ -180,9 +181,10 @@ TEST(OpenSSL_BaseProvider_C, PKI_Generate) {
 
         int serial = 0; //serial number
         int days = 365;
+        int ret;
 
         const EVP_MD *evp_md = EVP_sha256();
-        X509_NAME *name = NULL;
+        X509_NAME *name = nullptr;
         X509 *x = X509_new();
         ASSERT_TRUE(x != NULL);
         EVP_PKEY *pk = EVP_PKEY_new();
@@ -250,8 +252,9 @@ TEST(OpenSSL_BaseProvider_C, PKI_Generate) {
         {
             BIO *x509 = BIO_new(BIO_s_mem());
             PEM_write_bio_X509(x509, x);
-            int x509_len = BIO_pending(x509);
-            char *x509_text = (char *) malloc((size_t) (x509_len + 1));
+
+            auto x509_len = BIO_pending(x509);
+            auto x509_text = (char *) malloc((size_t) (x509_len + 1));
             BIO_read(x509, x509_text, x509_len);
             x509_text[x509_len] = 0;
             //use
