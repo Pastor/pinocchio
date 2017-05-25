@@ -102,6 +102,7 @@ add_ext(X509 *cert, int nid, const char *value) {
 
 TEST(OpenSSL_BaseProvider_C, DISABLED_GOST_Algorithm) {
     //https://unixdev.ru/an-example-of-using-openssl-gost-engine-in-cc/
+    //https://github.com/gost-engine/engine.git
     auto engine = ENGINE_by_id("gost");
     EXPECT_TRUE(engine != nullptr);
 
