@@ -5,6 +5,7 @@
 #include <openssl/rsa.h>
 #include <openssl/pem.h>
 #include <openssl/x509v3.h>
+#include <openssl/engine.h>
 
 void
 handleErrors() {
@@ -60,7 +61,7 @@ decrypt(unsigned char *ciphertext,
     return plaintext_len;
 }
 
-TEST(BaseProvider_C, SymmetricKey) {
+TEST(OpenSSL_BaseProvider_C, SymmetricKey) {
     auto *key = (unsigned char *) "01234567890123456789012345678901";
     auto *iv = (unsigned char *) "0123456789012345";
     auto *plaintext =
@@ -90,13 +91,42 @@ add_ext(X509 *cert, int nid, const char *value) {
     * no request and no CRL
     */
     X509V3_set_ctx(&ctx, cert, cert, nullptr, nullptr, 0);
-    ex = X509V3_EXT_conf_nid(nullptr, &ctx, nid, value);
+    ex = X509V3_EXT_conf_nid(nullptr, &ctx, nid, const_cast<char *>(value));
     if (ex == nullptr)
         return 0;
 
     X509_add_ext(cert, ex, -1);
     X509_EXTENSION_free(ex);
     return 1;
+}
+
+TEST(OpenSSL_BaseProvider_C, DISABLED_GOST_Algorithm) {
+    //https://unixdev.ru/an-example-of-using-openssl-gost-engine-in-cc/
+    auto engine = ENGINE_by_id("gost");
+    EXPECT_TRUE(engine != nullptr);
+
+    auto ret = ENGINE_init(engine);
+    EXPECT_FALSE(ret);
+    ENGINE_set_default(engine, ENGINE_METHOD_ALL);
+    EVP_PKEY *pkey = EVP_PKEY_new();
+    {
+        EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new_id(NID_id_GostR3410_2001, engine);
+        EVP_PKEY_paramgen_init(ctx);
+        EVP_PKEY_CTX_ctrl(ctx,
+                          NID_id_GostR3410_2001,
+                          EVP_PKEY_OP_PARAMGEN,
+                          /*EVP_PKEY_CTRL_GOST_PARAMSET*/EVP_PKEY_CTRL_CIPHER,
+                          NID_id_GostR3410_2001_CryptoPro_A_ParamSet,
+                          NULL);
+
+        EVP_PKEY_keygen_init(ctx);
+        EVP_PKEY_keygen(ctx, &pkey);
+        PEM_write_bio_PUBKEY(nullptr, pkey);
+        EVP_PKEY_CTX_free(ctx);
+    }
+    EVP_PKEY_free(pkey);
+    ENGINE_finish(engine);
+    ENGINE_cleanup();
 }
 
 TEST(OpenSSL_BaseProvider_C, PKI_Generate) {
@@ -179,12 +209,11 @@ TEST(OpenSSL_BaseProvider_C, PKI_Generate) {
         //http://stackoverflow.com/questions/2756553/x509-certificate-verification-in-c
         //https://opensource.apple.com/source/OpenSSL/OpenSSL-22/openssl/demos/x509/mkcert.c
 
-        int serial = 0; //serial number
+        long serial = 0x50000000; //serial number
         int days = 365;
         int ret;
 
         const EVP_MD *evp_md = EVP_sha256();
-        X509_NAME *name = nullptr;
         X509 *x = X509_new();
         ASSERT_TRUE(x != NULL);
         EVP_PKEY *pk = EVP_PKEY_new();
@@ -192,13 +221,13 @@ TEST(OpenSSL_BaseProvider_C, PKI_Generate) {
         ret = EVP_PKEY_assign_RSA(pk, RSAPrivateKey_dup(rsa));
         ASSERT_EQ(ret, 1);
 
-        X509_set_version(x, 3);
+        X509_set_version(x, 2);
         ASN1_INTEGER_set(X509_get_serialNumber(x), serial);
         X509_gmtime_adj(X509_get_notBefore(x), 0);
         X509_gmtime_adj(X509_get_notAfter(x), (long) 60 * 60 * 24 * days);
         X509_set_pubkey(x, pk);
 
-        name = X509_get_subject_name(x);
+        auto name = X509_get_subject_name(x);
         X509_NAME_add_entry_by_txt(name, "C",
                                    MBSTRING_ASC, (unsigned char *) "RUS", -1, -1, 0);
         X509_NAME_add_entry_by_txt(name, "CN",

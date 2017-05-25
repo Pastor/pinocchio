@@ -15,7 +15,7 @@
 #include <openssl/opensslv.h>
 #include <openssl/conf.h>
 #include <openssl/crypto.h>
-
+#include <openssl/engine.h>
 #endif
 
 int main(int argc, char **argv) {
@@ -28,7 +28,15 @@ int main(int argc, char **argv) {
 #	ifdef SIGPIPE
     signal(SIGPIPE, SIG_IGN);
 #	endif
-
+    ENGINE_load_builtin_engines();
+    ENGINE_load_dynamic();
+    fprintf(stdout, "Loaded:\n");
+    auto it = ENGINE_get_first();
+    while (it != nullptr) {
+        fprintf(stdout, "    ENGINE: %s\n", ENGINE_get_id(it));
+        it = ENGINE_get_next(it);
+    }
+    fprintf(stdout, "\n");
 #if OPENSSL_VERSION_NUMBER < 0x10100000L
     if (p != NULL && strcmp(p, "on") == 0) {
         CRYPTO_set_mem_debug_options(V_CRYPTO_MDEBUG_ALL);
