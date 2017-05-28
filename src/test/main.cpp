@@ -11,22 +11,32 @@
 #include <botan/init.h>
 #endif
 #elif defined(CRYPTO_OPENSSL)
+
 #include <openssl/opensslv.h>
 #include <openssl/conf.h>
 #include <openssl/crypto.h>
+#include <openssl/engine.h>
 #endif
 
 int main(int argc, char **argv) {
 #if defined(CRYPTO_BOTAN)
     std::cerr << Botan::runtime_version_check(BOTAN_VERSION_MAJOR, BOTAN_VERSION_MINOR, BOTAN_VERSION_PATCH) << std::endl;
 #elif defined(CRYPTO_OPENSSL)
-	char *p = getenv("OPENSSL_DEBUG_MEMORY");
+    auto p = getenv("OPENSSL_DEBUG_MEMORY");
 
-	CRYPTO_mem_ctrl(CRYPTO_MEM_CHECK_ON);
+    CRYPTO_mem_ctrl(CRYPTO_MEM_CHECK_ON);
 #	ifdef SIGPIPE
-	signal(SIGPIPE, SIG_IGN);
+    signal(SIGPIPE, SIG_IGN);
 #	endif
-
+    ENGINE_load_builtin_engines();
+    ENGINE_load_dynamic();
+    fprintf(stdout, "Loaded:\n");
+    auto it = ENGINE_get_first();
+    while (it != nullptr) {
+        fprintf(stdout, "    ENGINE: %s\n", ENGINE_get_id(it));
+        it = ENGINE_get_next(it);
+    }
+    fprintf(stdout, "\n");
 #if OPENSSL_VERSION_NUMBER < 0x10100000L
     if (p != NULL && strcmp(p, "on") == 0) {
         CRYPTO_set_mem_debug_options(V_CRYPTO_MDEBUG_ALL);
@@ -35,9 +45,9 @@ int main(int argc, char **argv) {
     OPENSSL_init();
     ERR_load_CRYPTO_strings();
 #else
-    if (p != NULL && strcmp(p, "on") == 0)
-		CRYPTO_set_mem_debug(1);
-    OPENSSL_init_crypto(OPENSSL_INIT_ENGINE_ALL_BUILTIN | OPENSSL_INIT_LOAD_CONFIG, NULL);
+    if (p != nullptr && strcmp(p, "on") == 0)
+        CRYPTO_set_mem_debug(1);
+    OPENSSL_init_crypto(OPENSSL_INIT_ENGINE_ALL_BUILTIN | OPENSSL_INIT_LOAD_CONFIG, nullptr);
 #endif
 
 #endif
@@ -60,9 +70,9 @@ int main(int argc, char **argv) {
     if (_CrtMemDifference(&_checkpoint_diff, &_checkpoint_start, &_checkpoint_end))
         _CrtMemDumpStatistics( &_checkpoint_diff );
 #endif
-	
+
 #if defined(CRYPTO_OPENSSL)
-	CRYPTO_cleanup_all_ex_data();
+    CRYPTO_cleanup_all_ex_data();
 #endif
 
     return ret;
