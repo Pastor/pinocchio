@@ -14,7 +14,7 @@ set(USE_STATIC ON)
 set(USE_CRYPTO OpenSSL)
 
 if (MSVC)
-    set(CMAKE_CXX_LINK_FLAGS "${CMAKE_CXX_LINK_FLAGS} /SUBSYSTEM:CONSOLE")
+    set(CMAKE_CXX_LINK_FLAGS "${CMAKE_CXX_LINK_FLAGS} /SUBSYSTEM:CONSOLE /IGNORE:4099")
     if (${CMAKE_BUILD_TYPE} STREQUAL "Debug")
         set(CMAKE_CFLAGS "${CMAKE_CFLAGS} /MDd /bigobj")
         add_compile_options(/MDd /bigobj)
@@ -93,6 +93,7 @@ elseif (${USE_CRYPTO} STREQUAL "OpenSSL")
 else ()
     message(ERROR "USE_CRYPTO not defined. Only Botan or OpenSSL")
 endif ()
+list(APPEND TESTS_FILES src/test/pkf_storage_tests.cpp)
 include_directories(src/main)
 include_directories(3rdparty/gtest/googletest/include)
 include_directories(3rdparty/mongoose)
@@ -102,7 +103,7 @@ include_directories(${CRYPTO_INCLUDE_DIR})
 
 add_subdirectory(3rdparty/gtest/googletest)
 
-set(SOURCE_FILES)
+set(SOURCE_FILES src/main/pkf_storage.c src/main/common.c)
 set(MAIN_FILES src/main/main.c src/main/web_server.c)
 
 set(MONGOOSE 3rdparty/mongoose/mongoose.c)
@@ -119,7 +120,7 @@ add_definitions(
 
 #add_definitions(-DDISABLE_MD5)
 
-set(SQLITE 3rdparty/sqlite/sqlite3.c src/main/web_server.c)
+set(SQLITE 3rdparty/sqlite/sqlite3.c)
 configure_file(
         ${CMAKE_CURRENT_SOURCE_DIR}/src/main/version.rc.in
         ${CMAKE_CURRENT_BINARY_DIR}/version.rc
@@ -133,7 +134,7 @@ configure_file(
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
 add_executable(${CMAKE_PROJECT_NAME} ${SOURCE_FILES} ${MAIN_FILES} ${CMAKE_BINARY_DIR}/version.rc ${MONGOOSE} ${SQLITE})
-add_executable(${CMAKE_PROJECT_NAME}_tests ${TESTS_FILES} src/test/main.cpp ${SOURCE_FILES})
+add_executable(${CMAKE_PROJECT_NAME}_tests ${TESTS_FILES} src/test/main.cpp ${SOURCE_FILES} ${SQLITE})
 target_link_libraries(${CMAKE_PROJECT_NAME} ${CRYPTO_LIBRARIES} ${DEPENDENCY_LIBS})
 target_link_libraries(${CMAKE_PROJECT_NAME}_tests ${CRYPTO_LIBRARIES} gtest ${DEPENDENCY_LIBS})
 if (APPLE)

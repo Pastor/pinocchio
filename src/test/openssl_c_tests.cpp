@@ -62,6 +62,8 @@ decrypt(unsigned char *ciphertext,
 }
 
 TEST(OpenSSL_BaseProvider_C, SymmetricKey) {
+    //https://stackoverflow.com/questions/24856303/openssl-aes-256-cbc-via-evp-api-in-c
+    //https://alinush.github.io/AES-encrypt/
     auto *key = (unsigned char *) "01234567890123456789012345678901";
     auto *iv = (unsigned char *) "0123456789012345";
     auto *plaintext =
