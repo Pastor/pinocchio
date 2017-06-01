@@ -212,7 +212,6 @@ TEST(OpenSSL_BaseProvider_C, PKI_Generate) {
 
         long serial = 0x50000000; //serial number
         int days = 365;
-        int ret;
 
         const EVP_MD *evp_md = EVP_sha256();
         X509 *x = X509_new();
