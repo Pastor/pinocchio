@@ -205,6 +205,7 @@ public:
                 break;
             case USER2:
                 cert_options.add_ex_constraint("PKIX.EmailProtection");
+                cert_options.constraints = Botan::DIGITAL_SIGNATURE;
                 break;
             case CA:
             default:
@@ -280,7 +281,10 @@ TEST(Botan_BaseProvider, KeyStorage) {
     ASSERT_FALSE(storage.validate(key1));
     storage.revoke(key1, Botan::REMOVE_FROM_CRL);
     ASSERT_TRUE(storage.validate(key1));
-	//std::cout << storage.ca_certificate().to_string() << std::endl;
-	//std::cout << key1.signed_certificate.to_string() << std::endl;
-	//std::cout << key2.signed_certificate.to_string() << std::endl;
+    std::cout << "========================  CA  ========================" << std::endl;
+    std::cout << storage.ca_certificate().to_string() << std::endl;
+    std::cout << "======================== Key1 ========================" << std::endl;
+    std::cout << key1.signed_certificate.to_string() << std::endl;
+    std::cout << "======================== Key2 ========================" << std::endl;
+    std::cout << key2.signed_certificate.to_string() << std::endl;
 }

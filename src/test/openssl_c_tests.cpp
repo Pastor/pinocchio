@@ -102,7 +102,7 @@ add_ext(X509 *cert, int nid, const char *value) {
     return 1;
 }
 
-TEST(OpenSSL_BaseProvider_C, DISABLED_GOST_Algorithm) {
+TEST(OpenSSL_BaseProvider_C, GOST_Algorithm) {
     //https://unixdev.ru/an-example-of-using-openssl-gost-engine-in-cc/
     //https://github.com/gost-engine/engine.git
     auto engine = ENGINE_by_id("gost");
@@ -120,7 +120,7 @@ TEST(OpenSSL_BaseProvider_C, DISABLED_GOST_Algorithm) {
                           EVP_PKEY_OP_PARAMGEN,
                           /*EVP_PKEY_CTRL_GOST_PARAMSET*/EVP_PKEY_CTRL_CIPHER,
                           NID_id_GostR3410_2001_CryptoPro_A_ParamSet,
-                          NULL);
+                          nullptr);
 
         EVP_PKEY_keygen_init(ctx);
         EVP_PKEY_keygen(ctx, &pkey);
@@ -149,8 +149,8 @@ TEST(OpenSSL_BaseProvider_C, PKI_Generate) {
         //RSA_print_fp(stdout, public_key, 0);
         //RSA_print_fp(stdout, private_key, 0);
 
-        ASSERT_TRUE(public_key != NULL);
-        ASSERT_TRUE(private_key != NULL);
+        ASSERT_TRUE(public_key != nullptr);
+        ASSERT_TRUE(private_key != nullptr);
 
         RSA_free(public_key);
         RSA_free(private_key);
@@ -217,9 +217,9 @@ TEST(OpenSSL_BaseProvider_C, PKI_Generate) {
 
         const EVP_MD *evp_md = EVP_sha256();
         X509 *x = X509_new();
-        ASSERT_TRUE(x != NULL);
+        ASSERT_TRUE(x != nullptr);
         EVP_PKEY *pk = EVP_PKEY_new();
-        ASSERT_TRUE(pk != NULL);
+        ASSERT_TRUE(pk != nullptr);
         ret = EVP_PKEY_assign_RSA(pk, RSAPrivateKey_dup(rsa));
         ASSERT_EQ(ret, 1);
 
