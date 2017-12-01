@@ -37,7 +37,7 @@
 
 /*
 * This file was automatically generated running
-* 'configure.py --amalgamation --link-method=hardlink'
+* 'configure.py --enable-modules=sqlite3 --with-cmake --amalgamation --disable-shared'
 *
 * Target
 *  - Compiler: cl /MD /bigobj /EHs /GR /O2 /Oi
@@ -52,7 +52,7 @@
 
 #define BOTAN_VERSION_RELEASE_TYPE "unreleased"
 
-#define BOTAN_VERSION_VC_REVISION "git:2f53dc937f33816445c7646b88e0ad826d197482"
+#define BOTAN_VERSION_VC_REVISION "git:41b1e738dbcbf2c33b418d2da235a56ad11feb9a"
 
 #define BOTAN_DISTRIBUTION_INFO "unspecified"
 
@@ -63,10 +63,10 @@
 #define BOTAN_INSTALL_PREFIX R"(c:\Botan)"
 #define BOTAN_INSTALL_HEADER_DIR "include/botan-2"
 #define BOTAN_INSTALL_LIB_DIR "lib"
-#define BOTAN_LIB_LINK "advapi32.lib user32.lib"
+#define BOTAN_LIB_LINK "advapi32.lib sqlite3 user32.lib"
 
 #ifndef BOTAN_DLL
-  #define BOTAN_DLL
+  #define BOTAN_DLL 
 #endif
 
 /* Target identification and feature test macros */
@@ -79,6 +79,7 @@
 #define BOTAN_TARGET_OS_HAS_MKGMTIME
 #define BOTAN_TARGET_OS_HAS_QUERY_PERF_COUNTER
 #define BOTAN_TARGET_OS_HAS_RTLSECUREZEROMEMORY
+#define BOTAN_TARGET_OS_HAS_STL_FILESYSTEM_MSVC
 #define BOTAN_TARGET_OS_HAS_THREADS
 #define BOTAN_TARGET_OS_HAS_VIRTUAL_LOCK
 
@@ -131,6 +132,7 @@
 #define BOTAN_HAS_CBC_MAC 20131128
 #define BOTAN_HAS_CECPQ1 20161116
 #define BOTAN_HAS_CERTSTOR_SQL 20160818
+#define BOTAN_HAS_CERTSTOR_SQLITE3 20160818
 #define BOTAN_HAS_CHACHA 20140103
 #define BOTAN_HAS_CHACHA_SSE2 20160831
 #define BOTAN_HAS_CIPHER_MODE_PADDING 20131128
@@ -169,7 +171,6 @@
 #define BOTAN_HAS_ENTROPY_SOURCE 20151120
 #define BOTAN_HAS_ENTROPY_SRC_CAPI 20131128
 #define BOTAN_HAS_ENTROPY_SRC_RDRAND 20131128
-#define BOTAN_HAS_ENTROPY_SRC_RDSEED 20151218
 #define BOTAN_HAS_ENTROPY_SRC_WIN32 20131128
 #define BOTAN_HAS_FFI 20170327
 #define BOTAN_HAS_FILTERS 20160415
@@ -184,6 +185,7 @@
 #define BOTAN_HAS_HKDF 20131128
 #define BOTAN_HAS_HMAC 20131128
 #define BOTAN_HAS_HMAC_DRBG 20140319
+#define BOTAN_HAS_HOTP 20170513
 #define BOTAN_HAS_HTTP_UTIL 20131128
 #define BOTAN_HAS_IDEA 20131128
 #define BOTAN_HAS_IDEA_SSE2 20131128
@@ -222,6 +224,7 @@
 #define BOTAN_HAS_PBKDF1 20131128
 #define BOTAN_HAS_PBKDF2 20131128
 #define BOTAN_HAS_PEM_CODEC 20131128
+#define BOTAN_HAS_PGP_S2K 20170527
 #define BOTAN_HAS_PKCS11 20160219
 #define BOTAN_HAS_PKCS5_PBES2 20141119
 #define BOTAN_HAS_PK_PADDING 20131128
@@ -262,8 +265,10 @@
 #define BOTAN_HAS_TLS 20150319
 #define BOTAN_HAS_TLS_CBC 20161008
 #define BOTAN_HAS_TLS_SESSION_MANAGER_SQL_DB 20141219
+#define BOTAN_HAS_TLS_SQLITE3_SESSION_MANAGER 20131128
 #define BOTAN_HAS_TLS_V10_PRF 20131128
 #define BOTAN_HAS_TLS_V12_PRF 20131128
+#define BOTAN_HAS_TOTP 20170519
 #define BOTAN_HAS_TWOFISH 20131128
 #define BOTAN_HAS_UTIL_FUNCTIONS 20161127
 #define BOTAN_HAS_WHIRLPOOL 20131128
@@ -2277,6 +2282,17 @@ class BOTAN_DLL HashFunction : public Buffered_Computation
       * @return hash block size as defined for this algorithm
       */
       virtual size_t hash_block_size() const { return 0; }
+
+      /**
+      * Return a new hash object with the same state as *this. This
+      * allows computing the hash of several messages with a common
+      * prefix more efficiently than would otherwise be possible.
+      *
+      * This function should be called `clone` but that was already
+      * used for the case of returning an uninitialized object.
+      * @return new hash object
+      */
+      virtual std::unique_ptr<HashFunction> copy_state() const = 0;
    };
 
 }
@@ -2292,6 +2308,7 @@ class BOTAN_DLL Adler32 final : public HashFunction
       std::string name() const override { return "Adler32"; }
       size_t output_length() const override { return 4; }
       HashFunction* clone() const override { return new Adler32; }
+      std::unique_ptr<HashFunction> copy_state() const override;
 
       void clear() override { m_S1 = 1; m_S2 = 0; }
 
@@ -5954,6 +5971,8 @@ class BOTAN_DLL Blake2b final : public HashFunction
       HashFunction* clone() const override;
       std::string name() const override;
       void clear() override;
+
+      std::unique_ptr<HashFunction> copy_state() const override;
 
    private:
       void add_data(const uint8_t input[], size_t length) override;
@@ -9953,6 +9972,28 @@ class BOTAN_DLL Certificate_Store_In_SQL : public Certificate_Store
 namespace Botan {
 
 /**
+* Certificate and private key store backed by an sqlite (http://sqlite.org) database.
+*/
+class BOTAN_DLL Certificate_Store_In_SQLite : public Certificate_Store_In_SQL
+   {
+   public:
+      /**
+      * Create/open a certificate store.
+      * @param db_path path to the database file
+      * @param passwd password to encrypt private keys in the database
+      * @param rng used for encrypting keys
+      * @param table_prefix optional prefix for db table names
+      */
+      Certificate_Store_In_SQLite(const std::string& db_path,
+                                  const std::string& passwd,
+                                  RandomNumberGenerator& rng,
+                                  const std::string& table_prefix = "");
+   };
+}
+
+namespace Botan {
+
+/**
 * CFB Mode
 */
 class BOTAN_DLL CFB_Mode : public Cipher_Mode
@@ -10338,20 +10379,8 @@ class BOTAN_DLL Cipher_Mode_Filter : public Keyed_Filter,
       void buffered_block(const uint8_t input[], size_t input_length) override;
       void buffered_final(const uint8_t input[], size_t input_length) override;
 
-      class Nonce_State
-         {
-         public:
-            explicit Nonce_State(bool allow_null_nonce) : m_fresh_nonce(allow_null_nonce) {}
-
-            void update(const InitializationVector& iv);
-            std::vector<uint8_t> get();
-         private:
-            bool m_fresh_nonce;
-            std::vector<uint8_t> m_nonce;
-         };
-
-      Nonce_State m_nonce;
       std::unique_ptr<Cipher_Mode> m_mode;
+      std::vector<uint8_t> m_nonce;
       secure_vector<uint8_t> m_buffer;
    };
 
@@ -10432,6 +10461,8 @@ class BOTAN_DLL Comb4P final : public HashFunction
          return new Comb4P(m_hash1->clone(), m_hash2->clone());
          }
 
+      std::unique_ptr<HashFunction> copy_state() const override;
+
       std::string name() const override
          {
          return "Comb4P(" + m_hash1->name() + "," + m_hash2->name() + ")";
@@ -10439,6 +10470,8 @@ class BOTAN_DLL Comb4P final : public HashFunction
 
       void clear() override;
    private:
+      Comb4P() {}
+
       void add_data(const uint8_t input[], size_t length) override;
       void final_result(uint8_t out[]) override;
 
@@ -10792,6 +10825,7 @@ class BOTAN_DLL CRC24 final : public HashFunction
       std::string name() const override { return "CRC24"; }
       size_t output_length() const override { return 3; }
       HashFunction* clone() const override { return new CRC24; }
+      std::unique_ptr<HashFunction> copy_state() const override;
 
       void clear() override { m_crc = 0xB704CE; }
 
@@ -10816,6 +10850,7 @@ class BOTAN_DLL CRC32 final : public HashFunction
       std::string name() const override { return "CRC32"; }
       size_t output_length() const override { return 4; }
       HashFunction* clone() const override { return new CRC32; }
+      std::unique_ptr<HashFunction> copy_state() const override;
 
       void clear() override { m_crc = 0xFFFFFFFF; }
 
@@ -14877,7 +14912,14 @@ class BOTAN_DLL EMSA_PKCS1v15_Raw final : public EMSA
       bool verify(const secure_vector<uint8_t>&, const secure_vector<uint8_t>&,
                   size_t) override;
 
+      /**
+      * @param hash_algo if non-empty, the digest id for that hash is
+      * included in the signature.
+      */
+      EMSA_PKCS1v15_Raw(const std::string& hash_algo = "");
    private:
+      size_t m_hash_output_len = 0;
+      std::vector<uint8_t> m_hash_id;
       secure_vector<uint8_t> m_message;
    };
 
@@ -15077,6 +15119,12 @@ doesn't exactly work well either!
 */
 BOTAN_DLL int botan_same_mem(const uint8_t* x, const uint8_t* y, size_t len);
 
+/**
+* Clear out memory using a system specific approach to bypass elision by the
+* compiler (currently using RtlSecureZeroMemory or tricks with volatile pointers).
+*/
+BOTAN_DLL int botan_scrub_mem(uint8_t* mem, size_t bytes);
+
 #define BOTAN_FFI_HEX_LOWER_CASE 1
 
 /**
@@ -15153,6 +15201,14 @@ typedef struct botan_hash_struct* botan_hash_t;
 * return it from init as an output parameter
 */
 BOTAN_DLL int botan_hash_init(botan_hash_t* hash, const char* hash_name, uint32_t flags);
+
+/**
+* Copy the state of a hash function object
+* @param dest destination hash object
+* @param source source hash object
+* @return 0 on success, a negative value on failure
+*/
+BOTAN_DLL int botan_hash_copy_state(botan_hash_t *dest, const botan_hash_t source);
 
 /**
 * Writes the output length of the hash function to *output_length
@@ -15840,6 +15896,8 @@ BOTAN_DLL int botan_pk_op_key_agreement(botan_pk_op_ka_t op,
                                         uint8_t out[], size_t* out_len,
                                         const uint8_t other_key[], size_t other_key_len,
                                         const uint8_t salt[], size_t salt_len);
+
+BOTAN_DLL int botan_pkcs_hash_id(const char* hash_name, uint8_t pkcs_id[], size_t* pkcs_id_len);
 
 
 /*
@@ -17181,6 +17239,7 @@ class BOTAN_DLL GOST_34_11 final : public HashFunction
       size_t output_length() const override { return 32; }
       size_t hash_block_size() const override { return 32; }
       HashFunction* clone() const override { return new GOST_34_11; }
+      std::unique_ptr<HashFunction> copy_state() const override;
 
       void clear() override;
 
@@ -17736,6 +17795,45 @@ class BOTAN_DLL HMAC_DRBG final : public Stateful_RNG
 
 namespace Botan {
 
+/**
+* HOTP one time passwords (RFC 4226)
+*/
+class BOTAN_DLL HOTP
+   {
+   public:
+      /**
+      * @param key the secret key shared between client and server
+      * @param hash_algo the hash algorithm to use, should be SHA-1 or SHA-256
+      * @param digits the number of digits in the OTP (must be 6, 7, or 8)
+      */
+      HOTP(const SymmetricKey& key, const std::string& hash_algo = "SHA-1", size_t digits = 6);
+
+      /**
+      * Generate the HOTP for a particular counter value
+      * @warning if the counter value is repeated the OTP ceases to be one-time
+      */
+      uint32_t generate_hotp(uint64_t counter);
+
+      /**
+      * Check an OTP value using a starting counter and a resync range
+      * @param otp the client provided OTP
+      * @param starting_counter the server's guess as to the current counter state
+      * @param resync_range if 0 then only HOTP(starting_counter) is accepted
+      * If larger than 0, up to resync_range values after HOTP are also checked.
+      * @return (valid,next_counter). If the OTP does not validate, always
+      * returns (false,starting_counter). Otherwise returns (true,next_counter)
+      * where next_counter is at most starting_counter + resync_range + 1
+      */
+      std::pair<bool,uint64_t> verify_hotp(uint32_t otp, uint64_t starting_counter, size_t resync_range = 0);
+   private:
+      std::unique_ptr<MessageAuthenticationCode> m_mac;
+      uint32_t m_digit_mod;
+   };
+
+}
+
+namespace Botan {
+
 namespace HTTP {
 
 struct Response
@@ -18061,6 +18159,7 @@ class BOTAN_DLL Keccak_1600 final : public HashFunction
       size_t output_length() const override { return m_output_bits / 8; }
 
       HashFunction* clone() const override;
+      std::unique_ptr<HashFunction> copy_state() const override;
       std::string name() const override;
       void clear() override;
 
@@ -18560,6 +18659,7 @@ class BOTAN_DLL MD4 final : public MDx_HashFunction
       std::string name() const override { return "MD4"; }
       size_t output_length() const override { return 16; }
       HashFunction* clone() const override { return new MD4; }
+      std::unique_ptr<HashFunction> copy_state() const override;
 
       void clear() override;
 
@@ -18594,6 +18694,7 @@ class BOTAN_DLL MD5 final : public MDx_HashFunction
       std::string name() const override { return "MD5"; }
       size_t output_length() const override { return 16; }
       HashFunction* clone() const override { return new MD5; }
+      std::unique_ptr<HashFunction> copy_state() const override;
 
       void clear() override;
 
@@ -24011,6 +24112,7 @@ class BOTAN_DLL Parallel final : public HashFunction
       void clear() override;
       std::string name() const override;
       HashFunction* clone() const override;
+      std::unique_ptr<HashFunction> copy_state() const override;
 
       size_t output_length() const override;
 
@@ -24508,6 +24610,62 @@ BOTAN_DLL bool matches(DataSource& source,
                        size_t search_range = 4096);
 
 }
+
+}
+
+namespace Botan {
+
+/**
+* OpenPGP's S2K
+*
+* See RFC 4880 sections 3.7.1.1, 3.7.1.2, and 3.7.1.3
+* If the salt is empty and iterations == 1, "simple" S2K is used
+* If the salt is non-empty and iterations == 1, "salted" S2K is used
+* If the salt is non-empty and iterations > 1, "iterated" S2K is used
+*
+* Due to complexities of the PGP S2K algorithm, time-based derivation
+* is not supported. So if iterations == 0 and msec.count() > 0, an
+* exception is thrown. In the future this may be supported, in which
+* case "iterated" S2K will be used and the number of iterations
+* performed is returned.
+*
+* Note that unlike PBKDF2, OpenPGP S2K's "iterations" are defined as
+* the number of bytes hashed.
+*/
+class BOTAN_DLL OpenPGP_S2K final : public PBKDF
+   {
+   public:
+      /**
+      * @param hash_in the hash function to use
+      */
+      explicit OpenPGP_S2K(HashFunction* hash) : m_hash(hash) {}
+
+      std::string name() const override
+         {
+         return "OpenPGP-S2K(" + m_hash->name() + ")";
+         }
+
+      PBKDF* clone() const
+         {
+         return new OpenPGP_S2K(m_hash->clone());
+         }
+
+      size_t pbkdf(uint8_t output_buf[], size_t output_len,
+                   const std::string& passphrase,
+                   const uint8_t salt[], size_t salt_len,
+                   size_t iterations,
+                   std::chrono::milliseconds msec) const override;
+
+      /**
+      * RFC 4880 encodes the iteration count to a single-byte value
+      */
+      static uint8_t encode_count(size_t iterations);
+
+      static size_t decode_count(uint8_t encoded_iter);
+
+   private:
+      std::unique_ptr<HashFunction> m_hash;
+   };
 
 }
 
@@ -25323,6 +25481,7 @@ class BOTAN_DLL RIPEMD_160 final : public MDx_HashFunction
       std::string name() const override { return "RIPEMD-160"; }
       size_t output_length() const override { return 20; }
       HashFunction* clone() const override { return new RIPEMD_160; }
+      std::unique_ptr<HashFunction> copy_state() const override;
 
       void clear() override;
 
@@ -25619,6 +25778,7 @@ class BOTAN_DLL SHA_160 final : public MDx_HashFunction
       std::string name() const override { return "SHA-160"; }
       size_t output_length() const override { return 20; }
       HashFunction* clone() const override { return new SHA_160; }
+      std::unique_ptr<HashFunction> copy_state() const override;
 
       void clear() override;
 
@@ -25630,10 +25790,23 @@ class BOTAN_DLL SHA_160 final : public MDx_HashFunction
    private:
       void compress_n(const uint8_t[], size_t blocks) override;
 
+#if defined(BOTAN_HAS_SHA1_ARMV8)
+      static void sha1_armv8_compress_n(secure_vector<uint32_t>& digest,
+                                        const uint8_t blocks[],
+                                        size_t block_count);
+#endif
+
 #if defined(BOTAN_HAS_SHA1_SSE2)
       static void sse2_compress_n(secure_vector<uint32_t>& digest,
                                   const uint8_t blocks[],
                                   size_t block_count);
+#endif
+
+#if defined(BOTAN_HAS_SHA1_X86_SHA_NI)
+      // Using x86 SHA instructions in Intel Goldmont and Cannonlake
+      static void sha1_compress_x86(secure_vector<uint32_t>& digest,
+                                    const uint8_t blocks[],
+                                    size_t block_count);
 #endif
 
 
@@ -25665,6 +25838,7 @@ class BOTAN_DLL SHA_224 final : public MDx_HashFunction
       std::string name() const override { return "SHA-224"; }
       size_t output_length() const override { return 28; }
       HashFunction* clone() const override { return new SHA_224; }
+      std::unique_ptr<HashFunction> copy_state() const override;
 
       void clear() override;
 
@@ -25686,12 +25860,34 @@ class BOTAN_DLL SHA_256 final : public MDx_HashFunction
       std::string name() const override { return "SHA-256"; }
       size_t output_length() const override { return 32; }
       HashFunction* clone() const override { return new SHA_256; }
+      std::unique_ptr<HashFunction> copy_state() const override;
 
       void clear() override;
 
       SHA_256() : MDx_HashFunction(64, true, true), m_digest(8)
          { clear(); }
+
+      /*
+      * Perform a SHA-256 compression. For internal use
+      */
+      static void compress_digest(secure_vector<uint32_t>& digest,
+                                  const uint8_t input[],
+                                  size_t blocks);
+
    private:
+
+#if defined(BOTAN_HAS_SHA2_32_ARMV8)
+      static void compress_digest_armv8(secure_vector<uint32_t>& digest,
+                                        const uint8_t input[],
+                                        size_t blocks);
+#endif
+
+#if defined(BOTAN_HAS_SHA2_32_X86)
+      static void compress_digest_x86(secure_vector<uint32_t>& digest,
+                                      const uint8_t input[],
+                                      size_t blocks);
+#endif
+
       void compress_n(const uint8_t[], size_t blocks) override;
       void copy_out(uint8_t[]) override;
 
@@ -25711,6 +25907,7 @@ class BOTAN_DLL SHA_384 final : public MDx_HashFunction
       std::string name() const override { return "SHA-384"; }
       size_t output_length() const override { return 48; }
       HashFunction* clone() const override { return new SHA_384; }
+      std::unique_ptr<HashFunction> copy_state() const override;
 
       void clear() override;
 
@@ -25732,6 +25929,7 @@ class BOTAN_DLL SHA_512 final : public MDx_HashFunction
       std::string name() const override { return "SHA-512"; }
       size_t output_length() const override { return 64; }
       HashFunction* clone() const override { return new SHA_512; }
+      std::unique_ptr<HashFunction> copy_state() const override;
 
       void clear() override;
 
@@ -25753,6 +25951,7 @@ class BOTAN_DLL SHA_512_256 final : public MDx_HashFunction
       std::string name() const override { return "SHA-512-256"; }
       size_t output_length() const override { return 32; }
       HashFunction* clone() const override { return new SHA_512_256; }
+      std::unique_ptr<HashFunction> copy_state() const override;
 
       void clear() override;
 
@@ -25785,6 +25984,7 @@ class BOTAN_DLL SHA_3 : public HashFunction
       size_t output_length() const override { return m_output_bits / 8; }
 
       HashFunction* clone() const override;
+      std::unique_ptr<HashFunction> copy_state() const override;
       std::string name() const override;
       void clear() override;
 
@@ -25884,6 +26084,7 @@ class BOTAN_DLL SHAKE_128 : public HashFunction
       size_t output_length() const override { return m_output_bits / 8; }
 
       HashFunction* clone() const override;
+      std::unique_ptr<HashFunction> copy_state() const override;
       std::string name() const override;
       void clear() override;
 
@@ -25915,6 +26116,7 @@ class BOTAN_DLL SHAKE_256 : public HashFunction
       size_t output_length() const override { return m_output_bits / 8; }
 
       HashFunction* clone() const override;
+      std::unique_ptr<HashFunction> copy_state() const override;
       std::string name() const override;
       void clear() override;
 
@@ -26177,6 +26379,7 @@ class BOTAN_DLL Skein_512 final : public HashFunction
       size_t output_length() const override { return m_output_bits / 8; }
 
       HashFunction* clone() const override;
+      std::unique_ptr<HashFunction> copy_state() const override;
       std::string name() const override;
       void clear() override;
    private:
@@ -26226,6 +26429,7 @@ class BOTAN_DLL SM3 final : public MDx_HashFunction
       std::string name() const override { return "SM3"; }
       size_t output_length() const override { return SM3_DIGEST_BYTES; }
       HashFunction* clone() const override { return new SM3; }
+      std::unique_ptr<HashFunction> copy_state() const override;
 
       void clear() override;
 
@@ -26493,6 +26697,50 @@ class BOTAN_DLL SP800_56C : public KDF
    };
 }
 
+class sqlite3;
+class sqlite3_stmt;
+
+namespace Botan {
+
+class BOTAN_DLL Sqlite3_Database  : public SQL_Database
+   {
+   public:
+      Sqlite3_Database(const std::string& file);
+
+      ~Sqlite3_Database();
+
+      size_t row_count(const std::string& table_name) override;
+
+      void create_table(const std::string& table_schema) override;
+
+      std::shared_ptr<Statement> new_statement(const std::string& sql) const override;
+   private:
+      class Sqlite3_Statement : public Statement
+         {
+         public:
+            void bind(int column, const std::string& val) override;
+            void bind(int column, size_t val) override;
+            void bind(int column, std::chrono::system_clock::time_point time) override;
+            void bind(int column, const std::vector<uint8_t>& val) override;
+            void bind(int column, const uint8_t* data, size_t len) override;
+
+            std::pair<const uint8_t*, size_t> get_blob(int column) override;
+            size_t get_size_t(int column) override;
+
+            size_t spin() override;
+            bool step() override;
+
+            Sqlite3_Statement(sqlite3* db, const std::string& base_sql);
+            ~Sqlite3_Statement();
+         private:
+            sqlite3_stmt* m_stmt;
+         };
+
+      sqlite3* m_db;
+   };
+
+}
+
 namespace Botan {
 
 /**
@@ -26680,7 +26928,10 @@ class BOTAN_DLL Stream_Cipher_Mode : public Cipher_Mode
    private:
       void start_msg(const uint8_t nonce[], size_t nonce_len) override
          {
-         m_cipher->set_iv(nonce, nonce_len);
+         if(nonce_len > 0)
+            {
+            m_cipher->set_iv(nonce, nonce_len);
+            }
          }
 
       void key_schedule(const uint8_t key[], size_t length) override
@@ -26708,6 +26959,8 @@ class BOTAN_DLL Tiger final : public MDx_HashFunction
          {
          return new Tiger(output_length(), m_passes);
          }
+
+      std::unique_ptr<HashFunction> copy_state() const override;
 
       void clear() override;
 
@@ -30421,6 +30674,87 @@ class BOTAN_DLL Session_Manager_SQL : public Session_Manager
 
 namespace Botan {
 
+namespace TLS {
+
+/**
+* An implementation of Session_Manager that saves values in a SQLite3
+* database file, with the session data encrypted using a passphrase.
+*
+* @warning For clients, the hostnames associated with the saved
+* sessions are stored in the database in plaintext. This may be a
+* serious privacy risk in some situations.
+*/
+class BOTAN_DLL
+Session_Manager_SQLite : public Session_Manager_SQL
+   {
+   public:
+      /**
+      * @param passphrase used to encrypt the session data
+      * @param rng a random number generator
+      * @param db_filename filename of the SQLite database file.
+               The table names tls_sessions and tls_sessions_metadata
+               will be used
+      * @param max_sessions a hint on the maximum number of sessions
+      *        to keep in memory at any one time. (If zero, don't cap)
+      * @param session_lifetime sessions are expired after this many
+      *        seconds have elapsed from initial handshake.
+      */
+      Session_Manager_SQLite(const std::string& passphrase,
+                             RandomNumberGenerator& rng,
+                             const std::string& db_filename,
+                             size_t max_sessions = 1000,
+                             std::chrono::seconds session_lifetime = std::chrono::seconds(7200));
+};
+
+}
+
+}
+
+namespace Botan {
+
+/**
+* TOTP (time based) one time passwords (RFC 6238)
+*/
+class BOTAN_DLL TOTP
+   {
+   public:
+      /**
+      * @param key the secret key shared between client and server
+      * @param hash_algo the hash algorithm to use, should be SHA-1, SHA-256 or SHA-512
+      * @param digits the number of digits in the OTP (must be 6, 7, or 8)
+      * @param time_step granularity of OTP in seconds
+      */
+      TOTP(const SymmetricKey& key, const std::string& hash_algo = "SHA-1",
+           size_t digits = 6, size_t time_step = 30);
+
+      /**
+      * Convert the provided time_point to a Unix timestamp and call generate_totp
+      */
+      uint32_t generate_totp(std::chrono::system_clock::time_point time_point);
+
+      /**
+      * Generate the OTP cooresponding the the provided "Unix timestamp" (ie
+      * number of seconds since midnight Jan 1, 1970)
+      */
+      uint32_t generate_totp(uint64_t unix_time);
+
+      bool verify_totp(uint32_t otp,
+                       std::chrono::system_clock::time_point time,
+                       size_t clock_drift_accepted = 0);
+
+      bool verify_totp(uint32_t otp, uint64_t unix_time,
+                       size_t clock_drift_accepted = 0);
+
+   private:
+      HOTP m_hotp;
+      size_t m_time_step;
+      std::chrono::system_clock::time_point m_unix_epoch;
+   };
+
+}
+
+namespace Botan {
+
 /**
 * A split secret, using the format from draft-mcgrew-tss-03
 */
@@ -30522,6 +30856,7 @@ class BOTAN_DLL Whirlpool final : public MDx_HashFunction
       std::string name() const override { return "Whirlpool"; }
       size_t output_length() const override { return 64; }
       HashFunction* clone() const override { return new Whirlpool; }
+      std::unique_ptr<HashFunction> copy_state() const override;
 
       void clear() override;
 

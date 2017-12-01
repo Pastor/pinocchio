@@ -251,6 +251,10 @@ public:
         (*_ca).revoke(_rand, key, why);
     }
 
+	Botan::X509_Certificate ca_certificate() {
+		return _ca->certificate;
+	}
+
 private:
     std::string to_string(OptionsType type) const {
         switch (type) {
@@ -265,7 +269,7 @@ private:
 };
 
 TEST(Botan_BaseProvider, KeyStorage) {
-    KeyStorage storage("RSA", "SHA-256");
+    KeyStorage storage(/*"RSA"*/"GOST-34.10", "SHA-256");
     const auto constraints = Botan::Key_Constraints(Botan::KEY_CERT_SIGN | Botan::CRL_SIGN);
     ASSERT_TRUE(storage.ca_has_contains(constraints));
     UserKey key1 = storage.create_user(KeyStorage::USER1);
@@ -276,4 +280,7 @@ TEST(Botan_BaseProvider, KeyStorage) {
     ASSERT_FALSE(storage.validate(key1));
     storage.revoke(key1, Botan::REMOVE_FROM_CRL);
     ASSERT_TRUE(storage.validate(key1));
+	//std::cout << storage.ca_certificate().to_string() << std::endl;
+	//std::cout << key1.signed_certificate.to_string() << std::endl;
+	//std::cout << key2.signed_certificate.to_string() << std::endl;
 }

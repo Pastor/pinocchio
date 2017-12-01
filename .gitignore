@@ -1,5 +1,6 @@
 .idea
 .build
+.build_w64
 .build-clion
 cmake-build-debug
 3rdparty/gost-engine

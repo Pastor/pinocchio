@@ -2449,21 +2449,6 @@ class Intel_Rdrand final : public Entropy_Source
 namespace Botan {
 
 /**
-* Entropy source using the rdseed instruction first introduced on
-* Intel's Broadwell architecture.
-*/
-class Intel_Rdseed final : public Entropy_Source
-   {
-   public:
-      std::string name() const override { return "rdseed"; }
-      size_t poll(RandomNumberGenerator& rng) override;
-   };
-
-}
-
-namespace Botan {
-
-/**
 * Round up
 * @param n a non-negative integer
 * @param align_to the alignment boundary
