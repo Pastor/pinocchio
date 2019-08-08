@@ -1,9 +1,0 @@
-﻿include
-*.lib
-*.json
-*.h
-*.dll
-*.dll.manifest
-*.exp
-*.def
-*.a
