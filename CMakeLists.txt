@@ -49,8 +49,6 @@ if (WIN32)
     add_definitions(-DUSE_STATIC -DBOTAN_DLL=)
 
     add_subdirectory(3rdparty/botan)
-    include_directories(3rdparty/botan)
-    include_directories(3rdparty/botan/external)
 elseif (APPLE)
     link_directories(/usr/local/Cellar/botan/2.1.0/lib)
     set(CRYPTO_LIBRARIES botan-2)
@@ -66,14 +64,17 @@ endif (WIN32)
 
 
 include_directories(3rdparty/sqlite)
-include_directories(src/main)
+include_directories(3rdparty/botan)
+include_directories(3rdparty/botan/external)
 include_directories(3rdparty/gtest/googletest/include)
 include_directories(3rdparty/mongoose)
 include_directories(3rdparty/json)
 include_directories(${CRYPTO_INCLUDE_DIR})
+include_directories(src_c)
 
 add_subdirectory(3rdparty/gtest/googletest)
 add_subdirectory(3rdparty/sqlite)
+add_subdirectory(src_c/plugins)
 
 enable_testing()
 if (BUILD_TESTING)

@@ -1,7 +1,9 @@
 ﻿#include <gtest/gtest.h>
 
 #if defined(USE_STATIC)
-#include "../../3rdparty/botan/botan_all.h"
+
+#include <botan_all.h>
+
 #else
 
 #include <botan/botan.h>
@@ -22,6 +24,9 @@
 #endif
 
 #include <fstream>
+
+#define DB_PATH ":memory:"
+//#define DB_PATH "ca.dbx"
 
 static void
 process_pipe(Botan::Pipe &pipe, const char *const input, const char *const output) {
@@ -122,21 +127,26 @@ struct CA_Support {
     Botan::X509_CRL crl;
 
     Botan::Path_Validation_Restrictions restrictions;
-    Botan::Certificate_Store_In_Memory store;
+    std::unique_ptr<Botan::Certificate_Store_In_SQL> store;
 
     CA_Support(Botan::X509_Certificate _certificate,
                std::unique_ptr<Botan::Private_Key> _private_key,
                const std::string &hash,
                Botan::RandomNumberGenerator &rand)
-            : certificate(_certificate), private_key(std::move(_private_key)), ca(certificate, (*private_key), hash, rand),
-              crl(ca.new_crl(rand)), restrictions(false, 80) {
-        store.add_crl(crl);
-        store.add_certificate(ca.ca_certificate());
+            : certificate(_certificate), private_key(std::move(_private_key)),
+              ca(certificate, (*private_key), hash, rand),
+              crl(ca.new_crl(rand)), restrictions(false, 80),
+              store(new Botan::Certificate_Store_In_SQLite(DB_PATH, "", rand)) {
+        store->insert_cert(ca.ca_certificate());
+    }
+
+    const std::vector<Botan::CRL_Entry> &revoked() {
+        return crl.get_revoked();
     }
 
     bool validate(const UserKey &key) const {
-        auto result = Botan::x509_path_validate(key.signed_certificate, restrictions, store);
-        auto known = store.certificate_known(key.certificate);
+        auto result = Botan::x509_path_validate(key.signed_certificate, restrictions, *store);
+        auto known = store->certificate_known(key.certificate);
         return result.successful_validation();
     }
 
@@ -145,14 +155,14 @@ struct CA_Support {
 
         revoked.emplace_back(Botan::CRL_Entry(key.signed_certificate, why));
         crl = ca.update_crl(crl, revoked, rand);
-        store.add_crl(crl);
+        store->revoke_cert(key.signed_certificate, Botan::KEY_COMPROMISE);
     }
 
     Botan::X509_Certificate sign(Botan::RandomNumberGenerator &rand, Botan::PKCS10_Request &request) {
         auto signed_certificate = ca.sign_request(request, rand,
                                                   from_date(2017, 05, 17),
                                                   from_date(2033, 01, 01));
-        store.add_certificate(signed_certificate);
+        store->insert_cert(signed_certificate);
         return signed_certificate;
     }
 
@@ -220,7 +230,10 @@ public:
             if (_algorithm == "RSA") {
                 return "4096";
             }
-            if (_algorithm == "GOST-34.10") {
+            if (_algorithm.find("GOST-34.10-2012-512") != std::string::npos) {
+                return "gost_512A";
+            }
+            if (_algorithm.find("GOST-34.10") != std::string::npos) {
                 return "gost_256A";
             }
             if (_algorithm == "ECKCDSA" || _algorithm == "ECGDSA") {
@@ -252,9 +265,13 @@ public:
         (*_ca).revoke(_rand, key, why);
     }
 
-	Botan::X509_Certificate ca_certificate() {
-		return _ca->certificate;
-	}
+    Botan::X509_Certificate ca_certificate() {
+        return _ca->certificate;
+    }
+
+    const std::vector<Botan::CRL_Entry> &revoked() {
+        return _ca->revoked();
+    }
 
 private:
     std::string to_string(OptionsType type) const {
@@ -270,7 +287,9 @@ private:
 };
 
 TEST(Botan_BaseProvider, KeyStorage) {
-    KeyStorage storage(/*"RSA"*/"GOST-34.10", "SHA-256");
+//    KeyStorage storage(/*"RSA"*/"GOST-34.10", "SHA-256");
+    KeyStorage storage(/*"RSA"*/"GOST-34.10-2012-256", "SHA-256");
+//    KeyStorage storage(/*"RSA"*/"GOST-34.10-2012-512", "SHA-256");
     const auto constraints = Botan::Key_Constraints(Botan::KEY_CERT_SIGN | Botan::CRL_SIGN);
     ASSERT_TRUE(storage.ca_has_contains(constraints));
     UserKey key1 = storage.create_user(KeyStorage::USER1);
@@ -280,11 +299,16 @@ TEST(Botan_BaseProvider, KeyStorage) {
     storage.revoke(key1);
     ASSERT_FALSE(storage.validate(key1));
     storage.revoke(key1, Botan::REMOVE_FROM_CRL);
-    ASSERT_TRUE(storage.validate(key1));
+    ASSERT_FALSE(storage.validate(key1));
     std::cout << "========================  CA  ========================" << std::endl;
     std::cout << storage.ca_certificate().to_string() << std::endl;
     std::cout << "======================== Key1 ========================" << std::endl;
     std::cout << key1.signed_certificate.to_string() << std::endl;
     std::cout << "======================== Key2 ========================" << std::endl;
     std::cout << key2.signed_certificate.to_string() << std::endl;
+    std::cout << "======================== CRL ========================" << std::endl;
+    for (const Botan::CRL_Entry &entry: storage.revoked()) {
+        std::cout << Botan::hex_encode(entry.serial_number(), true) << ": " << std::to_string(entry.reason_code())
+                  << std::endl;
+    }
 }
